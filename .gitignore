@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.streamlit/
+data/chroma/
+data/current.pdf
+data/.upload-*.pdf
+data/.sample-*.pdf
+data/indexed_file.txt
