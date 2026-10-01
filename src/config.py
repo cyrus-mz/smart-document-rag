@@ -15,8 +15,8 @@ class Settings:
     ollama_context_window: int = field(
         default_factory=lambda: int(os.getenv("OLLAMA_CONTEXT_WINDOW", "4096"))
     )
-    chunk_size: int = 512
-    chunk_overlap: int = 64
+    chunk_size: int = 1024
+    chunk_overlap: int = 100
     top_k: int = 4
 
     def __post_init__(self) -> None:
