@@ -109,6 +109,10 @@ def _format_statement_evidence(statements: list[tuple[str, int]]) -> str:
     )
 
 
+def _valid_statement_ids(statements: list[tuple[str, int]]) -> str:
+    return ",".join(f"S{position}" for position in range(1, len(statements) + 1))
+
+
 def _search_terms(text: str) -> set[str]:
     stop_words = {
         "about",
@@ -161,15 +165,23 @@ def _rank_evidence_statements(
 
 
 def _selected_statement_positions(
-    selection: str, statement_count: int, limit: int = 3
+    selection: str, statement_count: int
 ) -> list[int]:
+    selection = selection.strip()
+    if selection.casefold() == "none":
+        return []
+    if not re.fullmatch(
+        r"S\d+(?:\s*,\s*S\d+)*", selection, flags=re.IGNORECASE
+    ):
+        return []
+
     selected: list[int] = []
-    for value in re.findall(r"\bS(\d+)\b", selection, flags=re.IGNORECASE):
+    for value in re.findall(r"S(\d+)", selection, flags=re.IGNORECASE):
         position = int(value)
-        if 1 <= position <= statement_count and position not in selected:
+        if not 1 <= position <= statement_count:
+            return []
+        if position not in selected:
             selected.append(position)
-        if len(selected) == limit:
-            break
     return selected
 
 
@@ -212,6 +224,7 @@ class OllamaAgentModel:
         self._llm = Ollama(
             model=settings.llm_model,
             base_url=settings.ollama_url,
+            temperature=0.0,
             context_window=settings.ollama_context_window,
             request_timeout=120.0,
         )
@@ -225,13 +238,43 @@ class OllamaAgentModel:
             "Be concise; do not answer the question.\n\nQuestion: " + question
         )
 
+    def _correction_positions(
+        self, question: str, statements: list[tuple[str, int]]
+    ) -> list[int]:
+        if re.match(r"\s*(?:compare|contrast)\b", question, re.IGNORECASE):
+            return []
+        evidence = _format_statement_evidence(statements)
+        contradicts = self._complete(
+            "Does the evidence explicitly contradict a factual assertion made in "
+            "the question? A request to compare items makes no factual assertion. "
+            "Reply only YES or NO.\n\n"
+            f"Question: {question}\n\nEvidence statements:\n{evidence}"
+        )
+        if contradicts.strip().casefold() != "yes":
+            return []
+        correction = self._complete(
+            "Which evidence statements directly correct a false claim in the "
+            "question? Return only IDs from this valid list, comma-separated as "
+            "needed, or exactly NONE: "
+            f"{_valid_statement_ids(statements)}. Do not answer or explain.\n\n"
+            f"Question: {question}\n\nEvidence statements:\n{evidence}"
+        )
+        return _selected_statement_positions(correction, len(statements))
+
     def _grade_once(
         self, question: str, chunks: list[RetrievedChunk]
     ) -> bool:
         result = self._complete(
             "Decide whether the evidence contains enough information to answer the "
-            "question without outside knowledge. Reply with exactly SUFFICIENT or "
-            f"INSUFFICIENT.\n\nQuestion: {question}\n\nEvidence:\n"
+            "question without outside knowledge. Every requested part must be "
+            "supported, including every subject in a comparison. Evidence that "
+            "shows a premise in the question is false is sufficient to correct that "
+            "premise; it does not need to explain why the false premise is true. "
+            "For example, evidence that X is not Y is sufficient for a question "
+            "asking why X is Y. "
+            "Reply with exactly "
+            "SUFFICIENT or INSUFFICIENT.\n\n"
+            f"Question: {question}\n\nEvidence:\n"
             + format_evidence(chunks)
         )
         return _grade_is_sufficient(result)
@@ -242,28 +285,29 @@ class OllamaAgentModel:
         if self._grade_once(question, chunks):
             return True
 
-        # A holistic grade can miss direct support in a larger context. Focus it
-        # on selected statements, then apply the same sufficiency decision again.
+        # A holistic grade can miss direct support in a larger context. Focus the
+        # model on individual statements and trust its explicit selection.
         statements = _rank_evidence_statements(
             question, _evidence_statements(chunks)
         )
+        if self._correction_positions(question, statements):
+            return True
         selection = self._complete(
-            "Choose up to three evidence statement IDs that collectively provide "
-            "enough facts for a useful, source-grounded answer to the question. A "
-            "statement that corrects a mistaken premise counts as support. Return "
-            "only comma-separated IDs such as S2,S5, or NONE when the requested "
-            "information is absent. Do not answer or explain.\n\n"
+            "Choose the smallest set of evidence statement IDs that collectively "
+            "provides enough facts for a source-grounded answer to every part of the "
+            "question. For comparisons, include support for every subject. A "
+            "statement showing that a premise in the question is false answers that "
+            "premise; select it instead of requiring evidence for the false claim. If a "
+            "question asks why X is Y and a statement says X is not Y, select that "
+            "statement. If any "
+            "requested part is unsupported, return NONE. Return only comma-separated "
+            "IDs from this valid list, or exactly NONE: "
+            f"{_valid_statement_ids(statements)}. Do not answer or explain.\n\n"
             f"Question: {question}\n\nEvidence statements:\n"
             f"{_format_statement_evidence(statements)}"
         )
         selected = _selected_statement_positions(selection, len(statements))
-        if not selected:
-            return False
-        focused_evidence = [
-            RetrievedChunk(statements[position - 1][0], statements[position - 1][1])
-            for position in selected
-        ]
-        return self._grade_once(question, focused_evidence)
+        return bool(selected)
 
     def rewrite(
         self, question: str, analysis: str, chunks: list[RetrievedChunk]
@@ -281,20 +325,30 @@ class OllamaAgentModel:
         )
         if not statements:
             return ""
+        if re.match(r"\s*(?:compare|contrast)\b", question, re.IGNORECASE):
+            instruction = (
+                "Which statement IDs provide facts about each subject named in this "
+                "comparison? Include at least one statement for every subject. "
+                "Return only IDs from this valid list, comma-separated as needed, "
+                f"or exactly NONE: {_valid_statement_ids(statements)}."
+            )
+        else:
+            instruction = (
+                "Select the smallest set of evidence statement IDs that together "
+                "answers every part of the question. If any requested part is "
+                "unsupported, return NONE. Return only comma-separated IDs such as "
+                f"S1, or exactly NONE. Valid IDs: {_valid_statement_ids(statements)}. "
+                "Do not answer or explain."
+            )
         selection = self._complete(
-            "Select up to three evidence statement IDs that directly answer the "
-            "question. Rank the IDs from most to least useful, covering the initial "
-            "situation, central event, and outcome when available. Ignore tangential "
-            "passages. Return only comma-separated IDs such as S2,S5, or NONE when "
-            "the evidence cannot answer. Do not answer, paraphrase, or explain.\n\n"
-            f"Question: {question}\n\nEvidence statements:\n"
+            f"{instruction}\n\nQuestion: {question}\n\nEvidence statements:\n"
             f"{_format_statement_evidence(statements)}"
         )
         selected = _selected_statement_positions(selection, len(statements))
-        return "\n".join(
-            _with_page_citation(*statements[position - 1])
-            for position in selected
-        )
+        if not selected:
+            selected = self._correction_positions(question, statements)
+        chosen = [statements[position - 1] for position in selected]
+        return "\n".join(_with_page_citation(*statement) for statement in chosen)
 
 
 class RAGNodes:
