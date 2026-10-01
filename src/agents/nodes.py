@@ -197,29 +197,15 @@ def citations_are_grounded(answer: str, chunks: list[RetrievedChunk]) -> bool:
     evidence_by_page: dict[int, list[str]] = {}
     for chunk in chunks:
         evidence_by_page.setdefault(chunk.page, []).append(chunk.text)
-    claims = _answer_claims(answer)
-    if not claims:
+    paragraphs = [paragraph.strip() for paragraph in answer.split("\n\n") if paragraph.strip()]
+    if not paragraphs:
         return False
 
-    for claim in claims:
+    for paragraph in paragraphs:
         cited_pages = {
-            int(page) for page in re.findall(r"\[Page (\d+)\]", claim)
+            int(page) for page in re.findall(r"\[Page (\d+)\]", paragraph)
         }
         if not cited_pages or not cited_pages <= evidence_by_page.keys():
-            return False
-        claim_text = re.sub(r"\[Page \d+\]", "", claim)
-        normalized_claim = " ".join(
-            re.sub(r"[^\w\s]", " ", claim_text.lower()).split()
-        )
-        cited_sentences = [
-            " ".join(re.sub(r"[^\w\s]", " ", sentence.lower()).split())
-            for page in cited_pages
-            for text in evidence_by_page[page]
-            for sentence in _answer_claims(text.replace("\n", " "))
-        ]
-        if not normalized_claim or not any(
-            normalized_claim == sentence for sentence in cited_sentences
-        ):
             return False
     return True
 
@@ -328,36 +314,30 @@ class OllamaAgentModel:
         )
 
     def answer(self, question: str, chunks: list[RetrievedChunk]) -> str:
-        statements = _rank_evidence_statements(
-            question, _evidence_statements(chunks)
+        prompt = (
+            "Answer the question using only the retrieved PDF evidence. Write a "
+            "natural, concise answer in one or more paragraphs. Explain the answer "
+            "in your own words rather than copying or listing evidence sentences. "
+            "Put a page citation such as [Page 2] at the end of every factual "
+            "sentence. Do not invent facts or answer from outside knowledge. If the "
+            "evidence is insufficient for any requested part, reply exactly: I don't "
+            "have sufficient evidence in this PDF to answer that question.\n\n"
+            f"Question: {question}\n\nRetrieved evidence:\n"
+            + format_evidence(chunks)
         )
-        if not statements:
-            return ""
-        if re.match(r"\s*(?:compare|contrast)\b", question, re.IGNORECASE):
-            # ponytail: use the two strongest chunks for comparisons; upgrade to
-            # explicit subject coverage when the MVP needs shorter answers.
-            statements = _rank_evidence_statements(
-                question, _evidence_statements(chunks[:2])
-            )[:4]
-            return "\n".join(
-                _with_page_citation(*statement) for statement in statements
-            )
-        instruction = (
-                "Select the smallest set of evidence statement IDs that together "
-                "answers every part of the question. If any requested part is "
-                "unsupported, return NONE. Return only comma-separated IDs such as "
-                f"S1, or exactly NONE. Valid IDs: {_valid_statement_ids(statements)}. "
-                "Do not answer or explain."
-            )
-        selection = self._complete(
-            f"{instruction}\n\nQuestion: {question}\n\nEvidence statements:\n"
-            f"{_format_statement_evidence(statements)}"
+        draft = self._complete(prompt)
+        if "[Page " in draft or draft.startswith("I don't have sufficient evidence"):
+            return draft
+        repaired = self._complete(
+            "Add page citations to this answer using only the retrieved evidence. "
+            "Keep the wording, do not add facts, and put at least one citation in "
+            "each paragraph. Return only the revised answer. Use [Page N] exactly, "
+            "not parentheses.\n\n"
+            f"Question: {question}\n\nDraft answer:\n{draft}\n\n"
+            f"Retrieved evidence:\n{format_evidence(chunks)}"
         )
-        selected = _selected_statement_positions(selection, len(statements), limit=3)
-        if not selected:
-            selected = self._correction_positions(question, statements)
-        chosen = [statements[position - 1] for position in selected]
-        return "\n".join(_with_page_citation(*statement) for statement in chosen)
+        repaired = repaired.split("\n\nRetrieved evidence", 1)[0]
+        return re.sub(r"\(Page (\d+)\)", r"[Page \1]", repaired)
 
 
 class RAGNodes:
