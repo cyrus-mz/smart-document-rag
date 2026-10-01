@@ -165,7 +165,7 @@ def _rank_evidence_statements(
 
 
 def _selected_statement_positions(
-    selection: str, statement_count: int
+    selection: str, statement_count: int, limit: int | None = None
 ) -> list[int]:
     selection = selection.strip()
     if selection.casefold() == "none":
@@ -182,6 +182,8 @@ def _selected_statement_positions(
             return []
         if position not in selected:
             selected.append(position)
+        if limit is not None and len(selected) == limit:
+            break
     return selected
 
 
@@ -326,14 +328,15 @@ class OllamaAgentModel:
         if not statements:
             return ""
         if re.match(r"\s*(?:compare|contrast)\b", question, re.IGNORECASE):
-            instruction = (
-                "Which statement IDs provide facts about each subject named in this "
-                "comparison? Include at least one statement for every subject. "
-                "Return only IDs from this valid list, comma-separated as needed, "
-                f"or exactly NONE: {_valid_statement_ids(statements)}."
+            # ponytail: use the two strongest chunks for comparisons; upgrade to
+            # explicit subject coverage when the MVP needs shorter answers.
+            statements = _rank_evidence_statements(
+                question, _evidence_statements(chunks[:2])
+            )[:4]
+            return "\n".join(
+                _with_page_citation(*statement) for statement in statements
             )
-        else:
-            instruction = (
+        instruction = (
                 "Select the smallest set of evidence statement IDs that together "
                 "answers every part of the question. If any requested part is "
                 "unsupported, return NONE. Return only comma-separated IDs such as "
@@ -344,7 +347,7 @@ class OllamaAgentModel:
             f"{instruction}\n\nQuestion: {question}\n\nEvidence statements:\n"
             f"{_format_statement_evidence(statements)}"
         )
-        selected = _selected_statement_positions(selection, len(statements))
+        selected = _selected_statement_positions(selection, len(statements), limit=3)
         if not selected:
             selected = self._correction_positions(question, statements)
         chosen = [statements[position - 1] for position in selected]
