@@ -187,6 +187,12 @@ def _selected_statement_positions(
     return selected
 
 
+def answer_mentions_question(answer: str, question: str) -> bool:
+    # ponytail: this only rejects wholly unrelated grounded text; it is not a
+    # semantic completeness proof.
+    return bool(_search_terms(answer) & _search_terms(question))
+
+
 def citations_are_grounded(answer: str, chunks: list[RetrievedChunk]) -> bool:
     evidence_by_page: dict[int, list[str]] = {}
     for chunk in chunks:
@@ -386,9 +392,8 @@ class RAGNodes:
                 "answer": "I don't have sufficient evidence in this PDF to answer that question."
             }
         answer = self.model.answer(state["question"], state["chunks"])
-        if not citations_are_grounded(answer, state["chunks"]):
-            answer = (
-                "I couldn't produce a source-grounded answer from the retrieved "
-                "evidence. Try rephrasing the question."
-            )
+        if not citations_are_grounded(answer, state["chunks"]) or not answer_mentions_question(
+            answer, state["question"]
+        ):
+            answer = "I don't have sufficient evidence in this PDF to answer that question."
         return {"answer": answer}
