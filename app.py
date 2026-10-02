@@ -128,6 +128,7 @@ with st.sidebar:
                 count = activate_pdf(selected, active_pdf, settings, display_name=display_name)
             st.session_state.pop("answer_result", None)
             st.session_state.pop("question", None)
+            st.session_state.pop("question_input", None)
             st.success(f"Ready · {count} chunks indexed")
     except Exception as exc:
         st.error(f"Indexing failed: {exc}")
@@ -155,16 +156,17 @@ if not settings.manifest_path.exists():
 with st.form("question_form"):
     question = st.text_input(
         "Your question",
-        value=st.session_state.get("question", ""),
         placeholder="What exception changes the usual approval deadline?",
         label_visibility="collapsed",
+        key="question_input",
     )
     submitted = st.form_submit_button("Search document  →", use_container_width=True)
 
 if (submitted and question.strip()) or st.session_state.get("answer_result"):
     try:
         if submitted and question.strip():
-            st.session_state.question = question.strip()
+            # Keep the displayed question separate from the normalized retrieval query.
+            st.session_state.question = question
             with st.spinner("Reading the relevant pages…"):
                 graph = build_graph(open_retriever(settings), OllamaAgentModel(settings))
                 result = graph.invoke({"question": question.strip()})
