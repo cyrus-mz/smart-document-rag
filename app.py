@@ -68,14 +68,17 @@ html, body, [class*="css"] {{ font-family:'DM Sans', sans-serif; color:var(--ink
 .status-dot {{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#52d6a0; margin-right:7px; }}
 .question-card {{ padding:1.25rem 1.35rem .8rem; animation:rise .55s .05s ease both; }}
 div[data-testid="stForm"] {{ border:0; padding:0; }}
-.stTextInput input {{ color:var(--ink) !important; caret-color:#a8b7ff; border:1px solid var(--line); border-radius:12px; min-height:3rem; background:var(--input); font-size:1rem; }}
-.stTextInput input::placeholder {{ color:{palette['placeholder']} !important; opacity:1; }}
-.stTextInput input:focus {{ color:var(--ink) !important; border-color:#9aabff; box-shadow:0 0 0 3px #8ea2ff44; }}
+.stTextArea textarea {{ color:var(--ink) !important; caret-color:#a8b7ff; border:1px solid var(--line); border-radius:12px; min-height:5.5rem; background:var(--input); font-size:1rem; line-height:1.5; overflow-wrap:anywhere; }}
+.stTextArea textarea::placeholder {{ color:{palette['placeholder']} !important; opacity:1; }}
+.stTextArea textarea:focus {{ color:var(--ink) !important; border-color:#9aabff; box-shadow:0 0 0 3px #8ea2ff44; }}
+.stTextArea textarea {{ resize:vertical; }}
 .stButton > button, button[kind="secondaryFormSubmit"] {{ border:1px solid #a9b6ff; border-radius:11px; min-height:2.75rem; font-weight:700; background:linear-gradient(135deg,#3f55d8,#6040c5) !important; color:#fff !important; box-shadow:0 8px 18px #536dfe40; transition:transform .18s, box-shadow .18s; }}
 .stButton > button:hover, .stButton > button:focus, .stButton > button:active, button[kind="secondaryFormSubmit"]:hover, button[kind="secondaryFormSubmit"]:focus, button[kind="secondaryFormSubmit"]:active {{ color:#fff !important; background:linear-gradient(135deg,#3548c8,#5a3db5) !important; border-color:#d5dcff; }}
 .stButton > button:hover *, .stButton > button:focus *, button[kind="secondaryFormSubmit"]:hover * {{ color:#fff !important; }}
 .stButton > button:disabled {{ color:#aeb9ce !important; background:#35425b !important; border-color:#53627f; }}
 [data-testid="stStatusWidget"], [data-testid="stSpinner"] {{ color:var(--ink) !important; }}
+[data-testid="stSpinner"] svg {{ color:var(--ink) !important; stroke:var(--ink) !important; opacity:1 !important; }}
+[data-testid="stSpinner"] * {{ color:var(--ink) !important; }}
 .answer-card {{ padding:1.5rem 1.7rem; margin-top:1.6rem; animation:rise .4s ease both; }}
 .answer-heading {{ display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; }}
 .answer-heading h2 {{ font-family:'Space Grotesk'; margin:0; font-size:1.35rem; }}
@@ -89,7 +92,7 @@ div[data-testid="stForm"] {{ border:0; padding:0; }}
 [data-testid="stExpander"] summary {{ color:var(--ink) !important; background:var(--panel) !important; border-radius:15px; }}
 [data-testid="stExpander"] summary * {{ color:var(--ink) !important; background:transparent !important; }}
 @keyframes rise {{ from {{ opacity:0; transform:translateY(8px); }} to {{ opacity:1; transform:translateY(0); }} }}
-@media (prefers-reduced-motion: reduce) {{ *, *::before, *::after {{ animation-duration:0.01ms !important; transition-duration:0.01ms !important; }} }}
+@media (prefers-reduced-motion: reduce) {{ *, *::before, *::after {{ animation-duration:0.01ms !important; transition-duration:0.01ms !important; }} [data-testid="stSpinner"] svg {{ animation:none !important; opacity:1 !important; }} }}
 @media (max-width:700px) {{ .block-container {{ padding:1.5rem 1rem 3rem; }} .hero h1 {{ font-size:2.5rem; }} .answer-heading {{ align-items:flex-start; flex-direction:column; }} }}
 </style>
 """,
@@ -154,10 +157,12 @@ if not settings.manifest_path.exists():
     st.stop()
 
 with st.form("question_form"):
-    question = st.text_input(
+    question = st.text_area(
         "Your question",
         placeholder="What exception changes the usual approval deadline?",
         label_visibility="collapsed",
+        height=96,
+        help="Use Enter for a new line. Submit with the Search document button.",
         key="question_input",
     )
     submitted = st.form_submit_button("Search document  →", use_container_width=True)
@@ -165,7 +170,6 @@ with st.form("question_form"):
 if (submitted and question.strip()) or st.session_state.get("answer_result"):
     try:
         if submitted and question.strip():
-            # Keep the displayed question separate from the normalized retrieval query.
             st.session_state.question = question
             with st.spinner("Reading the relevant pages…"):
                 graph = build_graph(open_retriever(settings), OllamaAgentModel(settings))
