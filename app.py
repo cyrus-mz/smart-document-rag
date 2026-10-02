@@ -78,6 +78,7 @@ div[data-testid="stForm"] {{ border:0; padding:0; }}
 .stButton > button:disabled {{ color:#aeb9ce !important; background:#35425b !important; border-color:#53627f; }}
 [data-testid="stStatusWidget"], [data-testid="stSpinner"] {{ color:var(--ink) !important; }}
 [data-testid="stSpinner"] svg, [data-testid="stSpinnerIcon"] {{ color:var(--ink) !important; stroke:var(--ink) !important; opacity:1 !important; }}
+[data-testid="stSpinnerIcon"] {{ border-color:var(--ink) !important; border-right-color:transparent !important; }}
 [data-testid="stSpinner"] * {{ color:var(--ink) !important; }}
 .answer-card {{ padding:1.5rem 1.7rem; margin-top:1.6rem; animation:rise .4s ease both; }}
 .answer-heading {{ display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; }}
