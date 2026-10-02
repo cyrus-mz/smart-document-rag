@@ -328,13 +328,17 @@ class OllamaAgentModel:
             + format_evidence(chunks)
         )
         draft = self._complete(prompt)
-        if "[Page " in draft or draft.startswith("I don't have sufficient evidence"):
+        if draft.startswith("I don't have sufficient evidence") or citations_are_grounded(
+            draft, chunks
+        ):
             return draft
         repaired = self._complete(
-            "Add page citations to this answer using only the retrieved evidence. "
-            "Keep the wording, do not add facts, and put at least one citation in "
-            "each paragraph. Return only the revised answer. Use [Page N] exactly, "
-            "not parentheses.\n\n"
+            "Repair the citations in this answer using only pages present in the "
+            "retrieved evidence. Put at least one page citation in every paragraph, "
+            "including the first paragraph. Preserve the meaning and wording as much "
+            "as possible, add no unsupported facts, and use [Page N] exactly, not "
+            "parentheses. Citation repair alone does not prove factual grounding. "
+            "Return only the revised answer.\n\n"
             f"Question: {question}\n\nDraft answer:\n{draft}\n\n"
             f"Retrieved evidence:\n{format_evidence(chunks)}"
         )
