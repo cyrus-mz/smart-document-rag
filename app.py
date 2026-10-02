@@ -77,7 +77,7 @@ div[data-testid="stForm"] {{ border:0; padding:0; }}
 .stButton > button:hover *, .stButton > button:focus *, button[kind="secondaryFormSubmit"]:hover * {{ color:#fff !important; }}
 .stButton > button:disabled {{ color:#aeb9ce !important; background:#35425b !important; border-color:#53627f; }}
 [data-testid="stStatusWidget"], [data-testid="stSpinner"] {{ color:var(--ink) !important; }}
-[data-testid="stSpinner"] svg {{ color:var(--ink) !important; stroke:var(--ink) !important; opacity:1 !important; }}
+[data-testid="stSpinner"] svg, [data-testid="stSpinnerIcon"] {{ color:var(--ink) !important; stroke:var(--ink) !important; opacity:1 !important; }}
 [data-testid="stSpinner"] * {{ color:var(--ink) !important; }}
 .answer-card {{ padding:1.5rem 1.7rem; margin-top:1.6rem; animation:rise .4s ease both; }}
 .answer-heading {{ display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-bottom:1rem; }}
@@ -92,7 +92,7 @@ div[data-testid="stForm"] {{ border:0; padding:0; }}
 [data-testid="stExpander"] summary {{ color:var(--ink) !important; background:var(--panel) !important; border-radius:15px; }}
 [data-testid="stExpander"] summary * {{ color:var(--ink) !important; background:transparent !important; }}
 @keyframes rise {{ from {{ opacity:0; transform:translateY(8px); }} to {{ opacity:1; transform:translateY(0); }} }}
-@media (prefers-reduced-motion: reduce) {{ *, *::before, *::after {{ animation-duration:0.01ms !important; transition-duration:0.01ms !important; }} [data-testid="stSpinner"] svg {{ animation:none !important; opacity:1 !important; }} }}
+@media (prefers-reduced-motion: reduce) {{ *, *::before, *::after {{ animation-duration:0.01ms !important; transition-duration:0.01ms !important; }} [data-testid="stSpinner"] svg, [data-testid="stSpinnerIcon"] {{ animation:none !important; opacity:1 !important; }} }}
 @media (max-width:700px) {{ .block-container {{ padding:1.5rem 1rem 3rem; }} .hero h1 {{ font-size:2.5rem; }} .answer-heading {{ align-items:flex-start; flex-direction:column; }} }}
 </style>
 """,
