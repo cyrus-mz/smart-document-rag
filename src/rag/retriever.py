@@ -10,6 +10,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from src.config import Settings
 from src.ingest import active_index
+from src.tracing import trace_retrieval
 
 
 @dataclass(frozen=True)
@@ -33,6 +34,7 @@ class LlamaIndexRetriever:
     def __init__(self, index: Any, top_k: int = 4):
         self._retriever = index.as_retriever(similarity_top_k=top_k)
 
+    @trace_retrieval
     def retrieve(self, query: str) -> list[RetrievedChunk]:
         return [to_chunk(result) for result in self._retriever.retrieve(query)]
 

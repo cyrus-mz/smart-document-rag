@@ -53,6 +53,32 @@ Optional environment variables:
 
 The default models are `llama3.2` and `nomic-embed-text`.
 
+### Optional LangSmith tracing
+
+Tracing is opt-in and remains inert when `LANGSMITH_TRACING` is not enabled or
+`LANGSMITH_API_KEY` is absent. When enabled, the LangSmith SDK traces PDF text
+extraction/chunking, retrieval, and every LangGraph step (analysis, grading,
+optional rewrite, and answer generation), including textual prompts and outputs.
+PDF binary bytes and API keys are never sent as trace data.
+
+To configure it locally, copy `.env.example` to `.env` and replace only the
+placeholder value with your key (never commit `.env`):
+
+```bash
+cp .env.example .env
+# edit .env and set LANGSMITH_API_KEY to the key from LangSmith
+```
+
+The app loads this project `.env` at startup without overriding variables already
+exported in the environment. Required tracing variables are:
+
+- `LANGSMITH_TRACING=true`
+- `LANGSMITH_API_KEY=...`
+- `LANGSMITH_PROJECT=smart-document-rag` (optional project name)
+- `LANGSMITH_ENDPOINT=https://api.smith.langchain.com` (optional)
+
+Without these settings, local Ollama/RAG behavior is unchanged.
+
 ## Scope
 
 This is a local MVP for one PDF at a time.

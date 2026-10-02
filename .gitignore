@@ -3,6 +3,9 @@ __pycache__/
 .pytest_cache/
 .venv/
 .streamlit/
+.env
+.env.*
+!.env.example
 data/chroma/
 data/current.pdf
 data/.upload-*.pdf

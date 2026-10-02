@@ -9,6 +9,7 @@ from llama_index.llms.ollama import Ollama
 
 from src.config import Settings
 from src.rag.retriever import RetrievedChunk
+from src.tracing import trace_llm, trace_node
 
 
 class AgentState(TypedDict, total=False):
@@ -223,6 +224,7 @@ class OllamaAgentModel:
             request_timeout=120.0,
         )
 
+    @trace_llm
     def _complete(self, prompt: str) -> str:
         return self._llm.complete(prompt).text.strip()
 
@@ -345,6 +347,7 @@ class RAGNodes:
         self.retriever = retriever
         self.model = model
 
+    @trace_node
     def analyze_question(self, state: AgentState) -> dict:
         return {
             "analysis": self.model.analyze(state["question"]),
@@ -352,20 +355,24 @@ class RAGNodes:
             "rewrite_count": 0,
         }
 
+    @trace_node
     def retrieve_chunks(self, state: AgentState) -> dict:
         return {"chunks": self.retriever.retrieve(state["query"])}
 
+    @trace_node
     def grade_evidence(self, state: AgentState) -> dict:
         return {
             "evidence_good": self.model.grade(state["question"], state["chunks"])
         }
 
+    @trace_node
     def rewrite_query(self, state: AgentState) -> dict:
         query = self.model.rewrite(
             state["question"], state["analysis"], state["chunks"]
         )
         return {"query": query, "rewrite_count": state["rewrite_count"] + 1}
 
+    @trace_node
     def generate_answer(self, state: AgentState) -> dict:
         if not state["evidence_good"]:
             return {

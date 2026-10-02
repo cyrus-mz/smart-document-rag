@@ -3,6 +3,31 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import os
+import shlex
+
+
+def _load_project_env() -> None:
+    """Load the project's .env without replacing explicitly exported values."""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if not env_path.is_file():
+        return
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        key, separator, value = line.partition("=")
+        if not separator or not key.strip() or not key.strip().replace("_", "").isalnum():
+            continue
+        try:
+            parsed = shlex.split(value, comments=True)
+        except ValueError:
+            continue
+        os.environ.setdefault(key.strip(), parsed[0] if parsed else "")
+
+
+_load_project_env()
 
 
 @dataclass(frozen=True)

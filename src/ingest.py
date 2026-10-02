@@ -13,6 +13,7 @@ from llama_index.readers.file import PDFReader
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from src.config import Settings
+from src.tracing import trace_chunking, trace_ingest
 
 
 def active_index(settings: Settings) -> tuple[str, str]:
@@ -73,6 +74,7 @@ def page_number(metadata: dict, fallback: int) -> int:
     return fallback
 
 
+@trace_chunking
 def load_and_chunk(pdf_path: Path, settings: Settings):
     """Use LlamaIndex for PDF loading and chunking while retaining page metadata."""
     documents = PDFReader().load_data(file=pdf_path)
@@ -87,6 +89,7 @@ def load_and_chunk(pdf_path: Path, settings: Settings):
     return splitter.get_nodes_from_documents(documents)
 
 
+@trace_ingest
 def ingest_pdf(
     pdf_path: Path,
     settings: Settings | None = None,
